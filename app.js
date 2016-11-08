@@ -7,10 +7,14 @@ var config = require('./config');
 var results = [];
 var currentSystem = "";
 
+var categoryNumber = 0;
+var productNumber = 0;
+
+var uniqueLinks = [];
+
 function getLinks(url, linksNext) {
-    console.log("OPEN CATEGORY: ", url);
-    //«апрашиваем внутренние подкатегории или товары
-    request(url+'&limit=1000', function (err, res, body) {
+    console.log("OPEN CATEGORY #" + ++categoryNumber + ": ", url);
+    request(url + '&limit=1000', function (err, res, body) {
         if (err) {
             console.log("ERROR: ", err);
         }
@@ -21,19 +25,18 @@ function getLinks(url, linksNext) {
 
         var urls = [];
 
-        //ѕолучили список товаров или подкатегорий
         for (var i = 0; i < items.length; i++) {
             var url = $(items[i]).attr('href');
             urls.push(url);
         }
         if (isProducts) {
-            async.map(urls, getProductDetails,
+            async.mapLimit(urls, 3, getProductDetails,
                 function (err, results) {
                     linksNext(err, results);
                 })
         }
         else {
-            async.map(urls, getLinks,
+            async.mapLimit(urls, 3, getLinks,
                 function (err, results) {
                     linksNext(err, results);
                 })
@@ -42,10 +45,16 @@ function getLinks(url, linksNext) {
 }
 
 function getProductDetails(productUrl, next) {
-    console.log("OPEN PRODUCT: ", productUrl);
     var self = this;
+
+    var index = uniqueLinks.indexOf(productUrl);
+    if (index == -1) {
+        uniqueLinks.push(productUrl)
+    }
+    else console.log("DANGER, THIS LINKS REQUESTED AGAIN: ", uniqueLinks[index]);
+
+    console.log("OPEN PRODUCT #:" + ++productNumber + ": ", productUrl);
     self.url = productUrl;
-    //«апрашиваем внутренние подкатегории или товары
     request(productUrl, function (err, res, body) {
         if (err) {
             console.log("ERROR: ", err);
@@ -78,7 +87,6 @@ function parse(systemName, cb) {
         var categories = $(config[currentSystem].category);
 
         var urls = [];
-        //ѕолучили список категорий
         for (var i = 0; i < categories.length; i++) {
             var name = $(categories[i]).find('span').text();
             var url = $(categories[i]).attr('href');
@@ -94,13 +102,14 @@ function parse(systemName, cb) {
             };
             texnanoCategories.push(obj);
         }
-        async.map(urls, getLinks, function (err, result) {
-            cb(result);
+        async.mapLimit(urls, 3, getLinks, function (err, res) {
+            cb(results);
         })
     });
 }
 
+/*parse('texnano', function(res){
+ console.log(res);
+ });*/
 
-parse('texnano', function (results) {
-    console.log(results);
-})
+module.exports = parse;
